@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.log
+
+# DB / 환경
+*.sqlite3
+db.sqlite3
+.env
+*.env
+*.pem
+
+# Django static/media (서버에서만 생성되는 경우 무시)
+static/
+media/
+
+# VSCode / venv
+.vscode/
+venv/
+
+# 기타
+.DS_Store
+pytest_cache/

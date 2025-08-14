@@ -1,0 +1,53 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: todolist
+      POSTGRES_USER: ps123
+      POSTGRES_PASSWORD: ps123
+      TZ: Asia/Seoul
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ps123 -d todolist"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  web:
+    build: .                # ★ 로컬 Dockerfile 기반으로 빌드
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000
+    env_file:
+      - .env
+    environment:
+      # DB 연결
+      - DB_ENGINE=postgresql
+      - DB_NAME=todolist
+      - DB_USER=ps123
+      - DB_PASSWORD=ps123
+      - DB_HOST=db
+      - DB_PORT=5432
+
+      # Django
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - DJANGO_DEBUG=false
+
+      # CORS(프론트 주소들 쉼표로)
+      # 예: FRONTEND_ORIGINS=https://front.example.com,http://localhost:3000
+      # .env 에 두는 걸 권장
+      # - FRONTEND_ORIGINS=<.env 로 이동>
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "80:8000"            # 외부 80 → 내부 8000
+    volumes:
+      - /var/www/config_static:/app/static
+      - /var/www/config_media:/app/media
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
