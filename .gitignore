@@ -1,31 +1,22 @@
 # Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-*.so
-*.egg-info/
 .venv/
 venv/
-env/
-*.log
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Django 생성물
+db.sqlite3
+static/
+media/
 
 # Env / secrets
 .env
 *.env
 
-# Django (생성물)
-db.sqlite3
-*.sqlite3
-static/
-staticfiles/
-media/
-
-# IDE / OS
+# Git / IDE / OS
+.git/
 .vscode/
 .idea/
 .DS_Store
-*.swp
-
-# Node (혹시 있을 때)
-node_modules/
+*.log
