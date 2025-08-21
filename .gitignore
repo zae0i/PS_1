@@ -1,23 +1,31 @@
 # Python
 __pycache__/
 *.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.venv/
+venv/
+env/
 *.log
 
-# DB / 환경
-*.sqlite3
-db.sqlite3
+# Env / secrets
 .env
 *.env
-*.pem
 
-# Django static/media (서버에서만 생성되는 경우 무시)
+# Django (생성물)
+db.sqlite3
+*.sqlite3
 static/
+staticfiles/
 media/
 
-# VSCode / venv
+# IDE / OS
 .vscode/
-venv/
-
-# 기타
+.idea/
 .DS_Store
-pytest_cache/
+*.swp
+
+# Node (혹시 있을 때)
+node_modules/
