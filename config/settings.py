@@ -2,6 +2,7 @@
 from pathlib import Path
 from datetime import timedelta
 import os
+from corsheaders.defaults import default_headers  # ← 그대로 OK
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -10,7 +11,10 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-only-secret-key")
 DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
 ALLOWED_HOSTS = [
     h.strip()
-    for h in os.getenv("DJANGO_ALLOWED_HOSTS", "3.27.119.238,localhost,127.0.0.1").split(",")
+    for h in os.getenv(
+        "DJANGO_ALLOWED_HOSTS",
+        "3.27.119.238,localhost,127.0.0.1"
+    ).split(",")
     if h.strip()
 ]
 
@@ -21,11 +25,15 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
-    "django.contrib.staticfiles",
+    "django.contrib.staticfiles",  # ← collectstatic/whitenoise 사용
 
-    "rest_framework",          # DRF
+    # 3rd-party
+    "rest_framework",
     "corsheaders",
+    "django_filters",
+    "drf_spectacular",
 
+    # 도메인 앱
     "accounts",
     "timecheck",
     "timetable",
@@ -36,8 +44,9 @@ INSTALLED_APPS = [
 # ── 미들웨어 ───────────────────────────────────────────────────
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",   # ★ 추가: SecurityMiddleware 바로 아래
     "django.contrib.sessions.middleware.SessionMiddleware",
-    "corsheaders.middleware.CorsMiddleware",   # CORS는 CommonMiddleware보다 위
+    "corsheaders.middleware.CorsMiddleware",        # CORS는 CommonMiddleware보다 위
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -84,8 +93,10 @@ else:
         }
     }
 
+# ── 사용자 모델 ─────────────────────────────────────────────────
 AUTH_USER_MODEL = "accounts.Student"
 
+# ── 비밀번호 정책 ───────────────────────────────────────────────
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
@@ -93,17 +104,19 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-LANGUAGE_CODE = "en-us"
-TIME_ZONE = "UTC"
+# ── 로캘/타임존 ─────────────────────────────────────────────────
+LANGUAGE_CODE = os.getenv("DJANGO_LANGUAGE_CODE", "ko-kr")
+TIME_ZONE = os.getenv("DJANGO_TIME_ZONE", "Asia/Seoul")
 USE_I18N = True
 USE_TZ = True
 
-# ── Static / Media (도커 볼륨 경로와 일치) ───────────────────────
-STATIC_URL = "static/"
+# ── Static / Media (정적 서빙: Whitenoise) ─────────────────────
+STATIC_URL = "/static/"                     # ★ 슬래시로 시작하도록 수정 권장
 STATIC_ROOT = BASE_DIR / "static"
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"  # ★ 추가
 
 MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"   # docker-compose의 /app/media에 매핑
+MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -112,11 +125,17 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
-    # 공개 엔드포인트도 있으니 기본은 AllowAny,
-    # 보호가 필요한 뷰만 @permission_classes([IsAuthenticated]) 사용
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.AllowAny",
     ),
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
+    ],
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 10,
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
 SIMPLE_JWT = {
@@ -127,23 +146,25 @@ SIMPLE_JWT = {
     "UPDATE_LAST_LOGIN": True,
     "ALGORITHM": "HS256",
     "SIGNING_KEY": SECRET_KEY,
-    "AUTH_HEADER_TYPES": ("Bearer",),   # Authorization: Bearer <token>
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
+
+# ── drf-spectacular ─────────────────────────────────────────────
+SPECTACULAR_SETTINGS = {
+    "TITLE": "PS_1 API",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
 }
 
 # ── CORS / CSRF ─────────────────────────────────────────────────
-# 프론트 도메인: 쉼표(,)로 구분해 .env의 FRONTEND_ORIGINS로 관리
-_frontenv = os.getenv("FRONTEND_ORIGINS", "http://localhost:3000")
+_frontenv = os.getenv(
+    "FRONTEND_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000"
+)
 CORS_ALLOWED_ORIGINS = [o.strip() for o in _frontenv.split(",") if o.strip()]
-
-# JWT는 쿠키를 쓰지 않으므로 credentials 불필요
 CORS_ALLOW_CREDENTIALS = False
-
-# Authorization 헤더 허용
-from corsheaders.defaults import default_headers
 CORS_ALLOW_HEADERS = (*default_headers, "Authorization")
 
-# 관리자/폼 페이지용 신뢰 출처(운영에서 필요한 값만 남겨도 됨)
-# 프론트 주소에서 http/https 모두 생성
 _csrf = []
 for o in CORS_ALLOWED_ORIGINS:
     if o.startswith(("http://", "https://")):
@@ -151,5 +172,5 @@ for o in CORS_ALLOWED_ORIGINS:
         _csrf.append(o.replace("https://", "http://"))
 CSRF_TRUSTED_ORIGINS = sorted(set(_csrf))
 
-# 프록시/로드밸런서에서 SSL 종료 시 사용
+# 프록시/로드밸런서에서 SSL 종료 시 사용 (필요 시 주석 해제)
 # SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

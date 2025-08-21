@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from .models import Todo
+from .serializers import TodoSerializer
 
 def _parse_date(s: str):
     try:
@@ -15,8 +16,11 @@ def _parse_date(s: str):
 @permission_classes([IsAuthenticated])
 def todo_list_or_create(request):
     """
-    GET  /api/todo/?date=YYYY-MM-DD  -> 해당 날짜의 Todo 목록
-    POST /api/todo/ {content, date:'YYYY-MM-DD', status?} -> 새 Todo 생성
+    GET  /api/todo/?date=YYYY-MM-DD
+        -> 해당 날짜의 Todo 목록 ({"todos":[...]})
+    POST /api/todo/
+        body: { "content": "...", "date": "YYYY-MM-DD", "status": "not_started|in_progress|completed" }
+        -> 생성된 Todo 리턴
     """
     user = request.user
 
@@ -31,41 +35,24 @@ def todo_list_or_create(request):
             return Response({"message": "날짜 형식이 잘못되었습니다. 예: 2025-05-02"},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        todos = Todo.objects.filter(user=user, date=date)
-        data = [{
-            "id": t.id,
-            "content": t.content,
-            "status": t.status,
-            "status_label": t.get_status_display() if hasattr(t, "get_status_display") else t.status,
-            "date": t.date
-        } for t in todos]
-        return Response({"todos": data}, status=status.HTTP_200_OK)
+        todos = Todo.objects.filter(user=user, date=date).order_by("id")
+        ser = TodoSerializer(todos, many=True)
+        return Response({"todos": ser.data}, status=status.HTTP_200_OK)
 
     # POST
-    data = request.data or {}
-    content = data.get("content")
-    status_value = data.get("status", "not_started")
-    date_str = data.get("date")
-
-    if not all([content, date_str]):
-        return Response({"message": "내용과 날짜는 필수입니다."},
-                        status=status.HTTP_400_BAD_REQUEST)
-
-    date = _parse_date(date_str)
-    if not date:
-        return Response({"message": "날짜 형식이 잘못되었습니다. 예: 2025-05-02"},
-                        status=status.HTTP_400_BAD_REQUEST)
-
-    Todo.objects.create(user=user, content=content, status=status_value, date=date)
-    return Response({"message": "할 일 추가 완료!"}, status=status.HTTP_201_CREATED)
+    ser = TodoSerializer(data=request.data, context={"request": request})
+    ser.is_valid(raise_exception=True)
+    todo = ser.save()
+    return Response(ser.data, status=status.HTTP_201_CREATED)
 
 
 @api_view(["PUT", "DELETE"])
 @permission_classes([IsAuthenticated])
 def update_or_delete_todo(request, todo_id: int):
     """
-    PUT    /api/todo/<id>/ {content?, status?} -> 수정
-    DELETE /api/todo/<id>/                     -> 삭제
+    PUT    /api/todo/<id>/   body: {content?, status?, date?}
+           -> 수정된 Todo 리턴
+    DELETE /api/todo/<id>/   -> {"message":"할 일 삭제 완료!"}
     """
     try:
         todo = Todo.objects.get(id=todo_id, user=request.user)
@@ -74,17 +61,10 @@ def update_or_delete_todo(request, todo_id: int):
                         status=status.HTTP_404_NOT_FOUND)
 
     if request.method == "PUT":
-        data = request.data or {}
-        content = data.get("content")
-        status_value = data.get("status")
-
-        if content is not None:
-            todo.content = content
-        if status_value is not None:
-            todo.status = status_value
-
-        todo.save()
-        return Response({"message": "할 일 수정 완료!"}, status=status.HTTP_200_OK)
+        ser = TodoSerializer(todo, data=request.data, partial=True, context={"request": request})
+        ser.is_valid(raise_exception=True)
+        ser.save()
+        return Response(ser.data, status=status.HTTP_200_OK)
 
     # DELETE
     todo.delete()

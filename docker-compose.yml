@@ -19,7 +19,12 @@ services:
 
   web:
     build: .                # ★ 로컬 Dockerfile 기반으로 빌드
-    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000
+    command: >
+      sh -c "
+        python manage.py migrate --noinput &&
+        python manage.py collectstatic --noinput &&
+        gunicorn config.wsgi:application --bind 0.0.0.0:8000 --access-logfile - --error-logfile -
+      "
     env_file:
       - .env
     environment:
