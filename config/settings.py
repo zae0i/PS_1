@@ -1,8 +1,8 @@
-# settings.py
+# config/settings.py
 from pathlib import Path
 from datetime import timedelta
 import os
-from corsheaders.defaults import default_headers  # ← 그대로 OK
+from corsheaders.defaults import default_headers
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -25,7 +25,7 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
-    "django.contrib.staticfiles",  # ← collectstatic/whitenoise 사용
+    "django.contrib.staticfiles",   # collectstatic/whitenoise
 
     # 3rd-party
     "rest_framework",
@@ -44,9 +44,9 @@ INSTALLED_APPS = [
 # ── 미들웨어 ───────────────────────────────────────────────────
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",   # ★ 추가: SecurityMiddleware 바로 아래
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # ★ SecurityMiddleware 바로 아래
     "django.contrib.sessions.middleware.SessionMiddleware",
-    "corsheaders.middleware.CorsMiddleware",        # CORS는 CommonMiddleware보다 위
+    "corsheaders.middleware.CorsMiddleware",       # CORS는 CommonMiddleware보다 위
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -108,12 +108,17 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE = os.getenv("DJANGO_LANGUAGE_CODE", "ko-kr")
 TIME_ZONE = os.getenv("DJANGO_TIME_ZONE", "Asia/Seoul")
 USE_I18N = True
-USE_TZ = True
+USE_TZ = True  # DB 저장은 UTC, 표시 변환은 TIME_ZONE 기준
 
-# ── Static / Media (정적 서빙: Whitenoise) ─────────────────────
-STATIC_URL = "/static/"                     # ★ 슬래시로 시작하도록 수정 권장
+# ── Static / Media (정적 서빙: WhiteNoise) ─────────────────────
+STATIC_URL = "/static/"            # 슬래시로 시작
 STATIC_ROOT = BASE_DIR / "static"
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"  # ★ 추가
+
+# Django 5 권장 방식: STORAGES로 staticfiles 백엔드 지정
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+}
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
@@ -165,6 +170,7 @@ CORS_ALLOWED_ORIGINS = [o.strip() for o in _frontenv.split(",") if o.strip()]
 CORS_ALLOW_CREDENTIALS = False
 CORS_ALLOW_HEADERS = (*default_headers, "Authorization")
 
+# 관리자/폼 페이지용 신뢰 출처(운영에서 필요한 값만 남겨도 됨)
 _csrf = []
 for o in CORS_ALLOWED_ORIGINS:
     if o.startswith(("http://", "https://")):
